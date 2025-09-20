@@ -7,7 +7,7 @@ from datetime import datetime
 # Configure Streamlit page
 st.set_page_config(
     page_title="Resume Relevance System",
-    page_icon="📋",
+    page_icon="R",
     layout="wide"
 )
 
@@ -26,7 +26,7 @@ st.markdown("**AI-Powered Resume Evaluation Platform for Innomatics Research Lab
 st.sidebar.title("Navigation")
 page = st.sidebar.selectbox(
     "Select Page:",
-    ["Dashboard", "Job Management", "Resume Upload", "Evaluation", "Analytics"]
+    ["Dashboard", "Job Management", "Resume Upload", "Bulk Operations", "Evaluation", "Analytics", "AI Assistant"]
 )
 
 # Helper functions
@@ -83,20 +83,20 @@ def generate_feedback(score, verdict, matched_skills, missing_skills):
     if matched_skills:
         feedback += f"Strengths:\n"
         for skill in matched_skills:
-            feedback += f"• {skill}\n"
+            feedback += f"+ {skill}\n"
         feedback += "\n"
     
     if missing_skills:
         feedback += f"Areas for Improvement:\n"
         for skill in missing_skills:
-            feedback += f"• {skill}\n"
+            feedback += f"- {skill}\n"
         feedback += "\n"
     
     if score < 70:
         feedback += "Recommendations:\n"
-        feedback += "• Focus on developing the missing skills\n"
-        feedback += "• Consider relevant certifications or training\n"
-        feedback += "• Build projects that demonstrate these skills\n"
+        feedback += "- Focus on developing the missing skills\n"
+        feedback += "- Consider relevant certifications or training\n"
+        feedback += "- Build projects that demonstrate these skills\n"
     
     return feedback
 
@@ -359,6 +359,458 @@ elif page == "Resume Upload":
         else:
             st.info("No resumes uploaded yet. Upload your first resume using the form above.")
 
+elif page == "Bulk Operations":
+    st.header("Bulk Operations & Advanced Processing")
+    
+    tab1, tab2, tab3 = st.tabs(["Bulk Resume Upload", "Smart Matching", "Auto-Scoring"])
+    
+    with tab1:
+        st.subheader("Bulk Resume Upload")
+        st.markdown("Upload multiple resumes at once for efficient processing")
+        
+        # Multiple file upload
+        uploaded_files = st.file_uploader(
+            "Upload Multiple Resume Files",
+            type=['txt'],
+            accept_multiple_files=True,
+            help="Select multiple TXT files to upload at once"
+        )
+        
+        # Bulk text input
+        st.markdown("**OR paste multiple resumes (separated by '---')**")
+        bulk_text = st.text_area(
+            "Bulk Resume Text",
+            height=200,
+            placeholder="Resume 1 content here\n---\nResume 2 content here\n---\nResume 3 content here"
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            auto_extract_names = st.checkbox("Auto-extract candidate names", value=True)
+        with col2:
+            auto_extract_emails = st.checkbox("Auto-extract emails", value=True)
+        
+        if st.button("Process Bulk Upload", type="primary"):
+            processed_count = 0
+            
+            # Process uploaded files
+            if uploaded_files:
+                for i, uploaded_file in enumerate(uploaded_files):
+                    try:
+                        content = str(uploaded_file.read(), "utf-8")
+                        
+                        # Auto-extract name and email if enabled
+                        name = f"Candidate_{len(st.session_state.resumes) + i + 1}"
+                        email = f"candidate{len(st.session_state.resumes) + i + 1}@email.com"
+                        
+                        if auto_extract_names:
+                            # Simple name extraction (first line or filename)
+                            lines = content.strip().split('\n')
+                            if lines and len(lines[0].split()) <= 4:
+                                name = lines[0].strip()
+                            else:
+                                name = uploaded_file.name.split('.')[0].replace('_', ' ').title()
+                        
+                        if auto_extract_emails:
+                            # Simple email extraction
+                            email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+                            emails = re.findall(email_pattern, content)
+                            if emails:
+                                email = emails[0]
+                        
+                        # Extract skills
+                        skills = extract_skills(content)
+                        
+                        # Create resume object
+                        resume = {
+                            "id": len(st.session_state.resumes) + i + 1,
+                            "name": name,
+                            "email": email,
+                            "content": content,
+                            "skills": skills,
+                            "upload_date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                            "source": "bulk_upload"
+                        }
+                        
+                        st.session_state.resumes.append(resume)
+                        processed_count += 1
+                        
+                    except Exception as e:
+                        st.error(f"Error processing {uploaded_file.name}: {str(e)}")
+            
+            # Process bulk text
+            if bulk_text.strip():
+                resume_texts = [text.strip() for text in bulk_text.split('---') if text.strip()]
+                
+                for i, content in enumerate(resume_texts):
+                    try:
+                        # Auto-extract name and email
+                        name = f"Candidate_{len(st.session_state.resumes) + i + 1}"
+                        email = f"candidate{len(st.session_state.resumes) + i + 1}@email.com"
+                        
+                        if auto_extract_names:
+                            lines = content.strip().split('\n')
+                            if lines and len(lines[0].split()) <= 4:
+                                name = lines[0].strip()
+                        
+                        if auto_extract_emails:
+                            email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+                            emails = re.findall(email_pattern, content)
+                            if emails:
+                                email = emails[0]
+                        
+                        # Extract skills
+                        skills = extract_skills(content)
+                        
+                        # Create resume object
+                        resume = {
+                            "id": len(st.session_state.resumes) + processed_count + i + 1,
+                            "name": name,
+                            "email": email,
+                            "content": content,
+                            "skills": skills,
+                            "upload_date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                            "source": "bulk_text"
+                        }
+                        
+                        st.session_state.resumes.append(resume)
+                        processed_count += 1
+                        
+                    except Exception as e:
+                        st.error(f"Error processing resume {i+1}: {str(e)}")
+            
+            if processed_count > 0:
+                st.success(f"Successfully processed {processed_count} resumes!")
+                st.rerun()
+            else:
+                st.warning("No resumes to process. Please upload files or paste text.")
+    
+    with tab2:
+        st.subheader("Smart Job-Resume Matching")
+        st.markdown("AI-powered intelligent matching based on multiple criteria")
+        
+        if st.session_state.jobs and st.session_state.resumes:
+            # Advanced matching options
+            st.markdown("**Matching Criteria:**")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                skill_weight = st.slider("Skills Weight", 0.0, 1.0, 0.7, 0.1)
+                min_score_threshold = st.slider("Minimum Score Threshold", 0, 100, 60, 5)
+            
+            with col2:
+                top_matches = st.number_input("Top matches per job", min_value=1, max_value=10, value=3)
+            
+            # Smart matching algorithm
+            if st.button("Run Smart Matching", type="primary"):
+                matches_found = 0
+                
+                for job in st.session_state.jobs:
+                    st.write(f"**Matching for: {job['title']}**")
+                    
+                    job_matches = []
+                    
+                    for resume in st.session_state.resumes:
+                        # Calculate score
+                        skill_score = calculate_score(job['required_skills'], resume['skills'])
+                        
+                        if skill_score >= min_score_threshold:
+                            job_matches.append({
+                                'resume': resume,
+                                'score': skill_score,
+                                'matched_skills': list(set(job['required_skills']) & set(resume['skills'])),
+                                'missing_skills': list(set(job['required_skills']) - set(resume['skills']))
+                            })
+                    
+                    # Sort by score
+                    job_matches.sort(key=lambda x: x['score'], reverse=True)
+                    
+                    if job_matches:
+                        st.write(f"Found {len(job_matches)} qualified candidates:")
+                        
+                        # Display top matches in a table
+                        match_data = []
+                        for match in job_matches[:top_matches]:
+                            match_data.append({
+                                'Candidate': match['resume']['name'],
+                                'Score': f"{match['score']}%",
+                                'Matched Skills': len(match['matched_skills']),
+                                'Missing Skills': len(match['missing_skills']),
+                                'Skills': ', '.join(match['matched_skills'][:3]) + ('...' if len(match['matched_skills']) > 3 else '')
+                            })
+                        
+                        match_df = pd.DataFrame(match_data)
+                        st.dataframe(match_df, use_container_width=True)
+                        matches_found += len(job_matches)
+                    else:
+                        st.write("No qualified candidates found.")
+                    
+                    st.markdown("---")
+                
+                st.info(f"Smart matching completed! Found {matches_found} total matches.")
+        else:
+            st.warning("Please add jobs and resumes first.")
+    
+    with tab3:
+        st.subheader("Automated Scoring & Ranking")
+        st.markdown("Automatically score all resumes against all jobs")
+        
+        if st.session_state.jobs and st.session_state.resumes:
+            # Auto-scoring options
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                include_feedback = st.checkbox("Generate detailed feedback", value=True)
+                save_results = st.checkbox("Save results to evaluations", value=True)
+            
+            with col2:
+                top_n = st.number_input("Show top N candidates per job", min_value=1, max_value=10, value=3)
+            
+            if st.button("Run Auto-Scoring", type="primary"):
+                scoring_results = []
+                
+                progress_bar = st.progress(0)
+                total_combinations = len(st.session_state.jobs) * len(st.session_state.resumes)
+                current_combination = 0
+                
+                for job in st.session_state.jobs:
+                    job_results = []
+                    
+                    for resume in st.session_state.resumes:
+                        current_combination += 1
+                        progress_bar.progress(current_combination / total_combinations)
+                        
+                        # Calculate comprehensive score
+                        score = calculate_score(job['required_skills'], resume['skills'])
+                        verdict = get_verdict(score)
+                        
+                        matched_skills = list(set(job['required_skills']) & set(resume['skills']))
+                        missing_skills = list(set(job['required_skills']) - set(resume['skills']))
+                        
+                        result = {
+                            'job_title': job['title'],
+                            'candidate_name': resume['name'],
+                            'score': score,
+                            'verdict': verdict,
+                            'matched_skills': matched_skills,
+                            'missing_skills': missing_skills
+                        }
+                        
+                        if include_feedback:
+                            result['feedback'] = generate_feedback(score, verdict, matched_skills, missing_skills)
+                        
+                        job_results.append(result)
+                        
+                        # Save to evaluations if requested
+                        if save_results:
+                            evaluation = {
+                                "id": len(st.session_state.evaluations) + current_combination,
+                                "job_id": job['id'],
+                                "resume_id": resume['id'],
+                                "job_title": job['title'],
+                                "candidate_name": resume['name'],
+                                "score": score,
+                                "verdict": verdict,
+                                "matched_skills": matched_skills,
+                                "missing_skills": missing_skills,
+                                "feedback": result.get('feedback', ''),
+                                "evaluation_date": datetime.now().strftime("%Y-%m-%d %H:%M")
+                            }
+                            
+                            # Check if evaluation already exists
+                            existing = any(
+                                e['job_id'] == job['id'] and e['resume_id'] == resume['id']
+                                for e in st.session_state.evaluations
+                            )
+                            
+                            if not existing:
+                                st.session_state.evaluations.append(evaluation)
+                    
+                    # Sort job results by score
+                    job_results.sort(key=lambda x: x['score'], reverse=True)
+                    scoring_results.append({
+                        'job': job,
+                        'results': job_results[:top_n]  # Top N candidates
+                    })
+                
+                progress_bar.empty()
+                
+                # Display results
+                st.subheader("Auto-Scoring Results")
+                
+                for job_result in scoring_results:
+                    st.write(f"**{job_result['job']['title']}** - Top {len(job_result['results'])} Candidates:")
+                    
+                    if job_result['results']:
+                        results_data = []
+                        for result in job_result['results']:
+                            results_data.append({
+                                'Rank': len(results_data) + 1,
+                                'Candidate': result['candidate_name'],
+                                'Score': f"{result['score']}%",
+                                'Verdict': result['verdict'],
+                                'Matched Skills': len(result['matched_skills']),
+                                'Missing Skills': len(result['missing_skills'])
+                            })
+                        
+                        results_df = pd.DataFrame(results_data)
+                        st.dataframe(results_df, use_container_width=True)
+                    else:
+                        st.write("No candidates found.")
+                    
+                    st.markdown("---")
+                
+                st.success(f"Auto-scoring completed for {len(st.session_state.jobs)} jobs and {len(st.session_state.resumes)} resumes!")
+        else:
+            st.warning("Please add jobs and resumes first.")    
+
+elif page == "AI Assistant":
+    st.header("AI-Powered Assistant")
+    st.markdown("Get intelligent insights and recommendations")
+    
+    tab1, tab2 = st.tabs(["Resume Analysis", "Smart Recommendations"])
+    
+    with tab1:
+        st.subheader("Advanced Resume Analysis")
+        
+        if st.session_state.resumes:
+            selected_resume_id = st.selectbox(
+                "Select Resume for Analysis",
+                options=[r['id'] for r in st.session_state.resumes],
+                format_func=lambda x: next(r['name'] for r in st.session_state.resumes if r['id'] == x)
+            )
+            
+            selected_resume = next(r for r in st.session_state.resumes if r['id'] == selected_resume_id)
+            
+            if st.button("Analyze Resume", type="primary"):
+                st.subheader("AI Analysis Results")
+                
+                # Skill analysis
+                resume_skills = selected_resume['skills']
+                all_job_skills = []
+                for job in st.session_state.jobs:
+                    all_job_skills.extend(job['required_skills'])
+                
+                skill_demand = {}
+                for skill in set(all_job_skills):
+                    skill_demand[skill] = all_job_skills.count(skill)
+                
+                # Calculate skill value
+                valuable_skills = [skill for skill in resume_skills if skill in skill_demand]
+                missing_valuable_skills = [skill for skill, demand in skill_demand.items() 
+                                         if demand > 1 and skill not in resume_skills]
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("**High-Demand Skills Found:**")
+                    for skill in valuable_skills:
+                        demand_count = skill_demand.get(skill, 0)
+                        st.success(f"{skill} (Demand: {demand_count} jobs)")
+                    
+                    if not valuable_skills:
+                        st.info("No high-demand skills found")
+                
+                with col2:
+                    st.markdown("**Recommended Skills to Learn:**")
+                    for skill in sorted(missing_valuable_skills, 
+                                      key=lambda x: skill_demand[x], reverse=True)[:5]:
+                        demand_count = skill_demand[skill]
+                        st.warning(f"{skill} (Demand: {demand_count} jobs)")
+                    
+                    if not missing_valuable_skills:
+                        st.info("No additional skills recommended")
+                
+                # Resume strength analysis
+                st.subheader("Resume Completeness Analysis")
+                
+                content = selected_resume['content'].lower()
+                
+                # Check for key sections
+                sections_check = {
+                    'Experience/Work History': any(word in content for word in ['experience', 'work', 'employment', 'position']),
+                    'Education': any(word in content for word in ['education', 'degree', 'university', 'college']),
+                    'Skills': any(word in content for word in ['skills', 'technical', 'proficient']),
+                    'Projects': any(word in content for word in ['project', 'portfolio', 'github']),
+                    'Certifications': any(word in content for word in ['certification', 'certified', 'license'])
+                }
+                
+                strength_score = sum(sections_check.values()) / len(sections_check) * 100
+                
+                st.metric("Resume Completeness Score", f"{strength_score:.0f}%")
+                
+                for section, present in sections_check.items():
+                    if present:
+                        st.success(f"+ {section} section found")
+                    else:
+                        st.error(f"- {section} section missing")
+        else:
+            st.info("No resumes available for analysis")
+    
+    with tab2:
+        st.subheader("Smart Recommendations")
+        
+        if st.session_state.jobs and st.session_state.resumes:
+            # Generate intelligent recommendations
+            if st.button("Generate Recommendations", type="primary"):
+                st.subheader("AI-Powered Insights")
+                
+                # Market demand analysis
+                all_required_skills = []
+                for job in st.session_state.jobs:
+                    all_required_skills.extend(job['required_skills'])
+                
+                skill_demand_count = {}
+                for skill in set(all_required_skills):
+                    skill_demand_count[skill] = all_required_skills.count(skill)
+                
+                # Supply analysis
+                all_candidate_skills = []
+                for resume in st.session_state.resumes:
+                    all_candidate_skills.extend(resume['skills'])
+                
+                skill_supply_count = {}
+                for skill in set(all_candidate_skills):
+                    skill_supply_count[skill] = all_candidate_skills.count(skill)
+                
+                # Market gap analysis
+                st.markdown("**Market Gap Analysis:**")
+                
+                high_demand_low_supply = []
+                for skill, demand in skill_demand_count.items():
+                    supply = skill_supply_count.get(skill, 0)
+                    if demand >= 2 and supply < demand:
+                        gap_ratio = demand / max(supply, 1)
+                        high_demand_low_supply.append((skill, demand, supply, gap_ratio))
+                
+                high_demand_low_supply.sort(key=lambda x: x[3], reverse=True)
+                
+                if high_demand_low_supply:
+                    st.markdown("**Skills in High Demand but Low Supply:**")
+                    for skill, demand, supply, ratio in high_demand_low_supply[:5]:
+                        st.error(f"{skill}: {demand} jobs need it, only {supply} candidates have it (Gap: {ratio:.1f}x)")
+                    
+                    st.markdown("**Recommendations:**")
+                    st.info("- Consider training programs for high-gap skills")
+                    st.info("- Recruit externally for these critical skills")
+                    st.info("- Adjust job requirements to be more flexible")
+                else:
+                    st.success("Good supply-demand balance across all skills!")
+                
+                # Best matches summary
+                st.markdown("**Top Performing Candidates:**")
+                
+                if st.session_state.evaluations:
+                    eval_df = pd.DataFrame(st.session_state.evaluations)
+                    top_performers = eval_df.nlargest(5, 'score')
+                    
+                    for _, performer in top_performers.iterrows():
+                        st.success(f"{performer['candidate_name']}: {performer['score']}% for {performer['job_title']}")
+                else:
+                    st.info("Run evaluations to see top performers")
+        else:
+            st.info("Add jobs and resumes to get recommendations")
+
 elif page == "Evaluation":
     st.header("Resume Evaluation")
     
@@ -448,7 +900,7 @@ elif page == "Evaluation":
                     st.subheader("Matched Skills")
                     if matched_skills:
                         for skill in matched_skills:
-                            st.success(f"✓ {skill}")
+                            st.success(f"+ {skill}")
                     else:
                         st.info("No skills matched")
                 
@@ -457,12 +909,12 @@ elif page == "Evaluation":
                     if missing_required:
                         st.write("**Required (Missing):**")
                         for skill in missing_required:
-                            st.error(f"✗ {skill}")
+                            st.error(f"- {skill}")
                     
                     if missing_preferred:
                         st.write("**Preferred (Missing):**")
                         for skill in missing_preferred:
-                            st.warning(f"◦ {skill}")
+                            st.warning(f"~ {skill}")
                     
                     if not missing_required and not missing_preferred:
                         st.info("All skills matched!")
