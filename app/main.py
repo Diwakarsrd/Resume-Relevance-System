@@ -1,4 +1,7 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, create_engine, select
 from pathlib import Path
 import shutil
@@ -33,8 +36,22 @@ SQLModel.metadata.create_all(engine)
 
 app = FastAPI(title="Resume Relevance Check System", description="AI-powered resume evaluation platform")
 
-@app.get("/")
-def root():
+# Setup templates and static files
+templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/", response_class=HTMLResponse)
+def dashboard(request: Request):
+    """Serve the main dashboard interface"""
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard_redirect(request: Request):
+    """Dashboard redirect"""
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/api")
+def api_root():
     """Root endpoint with system information"""
     return {
         "message": "Resume Relevance Check System API",

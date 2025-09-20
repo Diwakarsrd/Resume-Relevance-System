@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resume Relevance Check System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body class="bg-gray-100">
+    <nav class="bg-blue-600 text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">💼 Resume Relevance System</h1>
+            <div class="space-x-4">
+                <button onclick="showDashboard()" class="px-4 py-2 bg-blue-500 rounded hover:bg-blue-700">Dashboard</button>
+                <button onclick="showJobs()" class="px-4 py-2 bg-blue-500 rounded hover:bg-blue-700">Jobs</button>
+                <button onclick="showResumes()" class="px-4 py-2 bg-blue-500 rounded hover:bg-blue-700">Resumes</button>
+                <button onclick="showEvaluate()" class="px-4 py-2 bg-blue-500 rounded hover:bg-blue-700">Evaluate</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-6">
+        <!-- Dashboard Section -->
+        <div id="dashboard-section" class="section">
+            <h2 class="text-3xl font-bold mb-6">📈 Dashboard Overview</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="text-lg font-semibold text-gray-700">Total Jobs</h3>
+                    <p id="total-jobs" class="text-3xl font-bold text-blue-600">-</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="text-lg font-semibold text-gray-700">Total Resumes</h3>
+                    <p id="total-resumes" class="text-3xl font-bold text-green-600">-</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="text-lg font-semibold text-gray-700">Total Evaluations</h3>
+                    <p id="total-evaluations" class="text-3xl font-bold text-purple-600">-</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="text-lg font-semibold text-gray-700">Average Score</h3>
+                    <p id="avg-score" class="text-3xl font-bold text-orange-600">-</p>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="text-xl font-semibold mb-4">Recent Evaluations</h3>
+                <div id="recent-evaluations" class="overflow-x-auto">
+                    <table class="min-w-full table-auto">
+                        <thead>
+                            <tr class="bg-gray-50">
+                                <th class="px-4 py-2 text-left">Candidate</th>
+                                <th class="px-4 py-2 text-left">Job</th>
+                                <th class="px-4 py-2 text-left">Score</th>
+                                <th class="px-4 py-2 text-left">Verdict</th>
+                                <th class="px-4 py-2 text-left">Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="evaluations-table-body">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Jobs Section -->
+        <div id="jobs-section" class="section hidden">
+            <h2 class="text-3xl font-bold mb-6">💼 Job Management</h2>
+            
+            <!-- Create Job Form -->
+            <div class="bg-white p-6 rounded-lg shadow mb-6">
+                <h3 class="text-xl font-semibold mb-4">➕ Create New Job</h3>
+                <form id="job-form" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Job Title *</label>
+                            <input type="text" id="job-title" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Must-Have Skills (comma separated)</label>
+                            <input type="text" id="must-have" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Nice-to-Have Skills (comma separated)</label>
+                        <input type="text" id="nice-to-have" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Job Description *</label>
+                        <textarea id="job-description" required rows="6" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"></textarea>
+                    </div>
+                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">🚀 Create Job</button>
+                </form>
+            </div>
+
+            <!-- Jobs List -->
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="text-xl font-semibold mb-4">📋 Existing Jobs</h3>
+                <div id="jobs-list" class="space-y-4">
+                </div>
+            </div>
+        </div>
+
+        <!-- Resumes Section -->
+        <div id="resumes-section" class="section hidden">
+            <h2 class="text-3xl font-bold mb-6">📄 Resume Management</h2>
+            
+            <!-- Upload Resume Form -->
+            <div class="bg-white p-6 rounded-lg shadow mb-6">
+                <h3 class="text-xl font-semibold mb-4">⬆️ Upload New Resume</h3>
+                <form id="resume-form" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Candidate Name *</label>
+                            <input type="text" id="candidate-name" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Email *</label>
+                            <input type="email" id="candidate-email" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Resume File (PDF/DOCX/TXT) *</label>
+                        <input type="file" id="resume-file" accept=".pdf,.docx,.txt" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2">
+                    </div>
+                    <button type="submit" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700">📤 Upload Resume</button>
+                </form>
+            </div>
+
+            <!-- Resumes List -->
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="text-xl font-semibold mb-4">📋 Uploaded Resumes</h3>
+                <div id="resumes-list" class="space-y-4">
+                </div>
+            </div>
+        </div>
+
+        <!-- Evaluate Section -->
+        <div id="evaluate-section" class="section hidden">
+            <h2 class="text-3xl font-bold mb-6">🔍 Resume Evaluation</h2>
+            
+            <div class="bg-white p-6 rounded-lg shadow mb-6">
+                <h3 class="text-xl font-semibold mb-4">📊 Evaluate Resume</h3>
+                <form id="evaluate-form" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Select Job *</label>
+                            <select id="eval-job" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2">
+                                <option value="">Select a job...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Select Resume *</label>
+                            <select id="eval-resume" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2">
+                                <option value="">Select a resume...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="bg-purple-600 text-white px-6 py-2 rounded hover:bg-purple-700">🎯 Evaluate Match</button>
+                </form>
+            </div>
+
+            <!-- Evaluation Results -->
+            <div id="evaluation-results" class="bg-white p-6 rounded-lg shadow hidden">
+                <h3 class="text-xl font-semibold mb-4">📈 Evaluation Results</h3>
+                <div id="results-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
