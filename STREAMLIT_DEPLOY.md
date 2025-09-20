@@ -1,5 +1,35 @@
 # 🚀 Streamlit Cloud Deployment Guide
 
+## 🆘 QUICK FIX for Requirements Error
+
+If you're getting a requirements installation error, try these fixes:
+
+### Option 1: Use Minimal Setup
+1. **Rename your main file** in Streamlit Cloud settings:
+   - Change from: `streamlit_app.py`
+   - To: `streamlit_app_simple.py`
+
+### Option 2: Use Simplified Requirements
+1. **In your GitHub repo**, replace `requirements.txt` with:
+```txt
+streamlit
+requests
+pandas
+plotly
+fastapi
+uvicorn
+python-multipart
+```
+
+### Option 3: Restart with Clean Deploy
+1. **Delete the app** in Streamlit Cloud
+2. **Create new app** with these exact settings:
+   - Repository: `YOUR_USERNAME/Resume-Relevance-System`
+   - Branch: `main` 
+   - Main file: `streamlit_app_simple.py`
+
+---
+
 ## Quick Deploy Button
 [![Deploy to Streamlit Cloud](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy)
 
