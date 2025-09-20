@@ -4,6 +4,10 @@
     {
       "src": "api/index.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "dashboard/index.py",
+      "use": "@vercel/python"
     }
   ],
   "routes": [
@@ -12,8 +16,12 @@
       "dest": "/api/index.py"
     },
     {
+      "src": "/dashboard/(.*)",
+      "dest": "/dashboard/index.py"
+    },
+    {
       "src": "/",
-      "dest": "/api/index.py"
+      "dest": "/dashboard/index.py"
     }
   ],
   "env": {
@@ -21,8 +29,10 @@
   },
   "functions": {
     "api/index.py": {
-      "maxDuration": 30,
-      "memory": 1024
+      "maxDuration": 60
+    },
+    "dashboard/index.py": {
+      "maxDuration": 60
     }
   }
 }
