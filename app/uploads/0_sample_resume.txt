@@ -1,0 +1,52 @@
+
+John Smith
+Software Developer
+Email: john.smith@email.com
+Phone: (555) 123-4567
+
+EDUCATION
+Bachelor of Technology in Computer Science
+XYZ University, 2020
+
+SKILLS
+Programming Languages: Python, JavaScript, Java
+Web Frameworks: FastAPI, Django, React.js
+Machine Learning: scikit-learn, pandas, numpy, matplotlib
+Databases: PostgreSQL, MongoDB, MySQL
+Tools: Git, Docker, VS Code
+Cloud: Basic AWS knowledge
+
+EXPERIENCE
+Software Developer | Tech Company (2021-2023)
+- Developed web applications using Python and FastAPI
+- Built REST APIs serving 10,000+ daily requests
+- Worked with PostgreSQL databases for data storage
+- Collaborated with team using Git version control
+
+Junior Developer | Startup Inc. (2020-2021)
+- Created data analysis scripts using Python and pandas
+- Built interactive dashboards with plotly
+- Learned machine learning basics with scikit-learn
+
+PROJECTS
+E-commerce API (2023)
+- Built a complete e-commerce backend using FastAPI
+- Integrated with PostgreSQL database
+- Implemented user authentication and payment processing
+- Technologies: Python, FastAPI, PostgreSQL, Docker
+
+Data Analysis Dashboard (2022)
+- Created interactive data visualization dashboard
+- Used pandas for data processing and plotly for visualization
+- Analyzed sales data to identify trends
+- Technologies: Python, pandas, plotly, streamlit
+
+Machine Learning Model (2021)
+- Built a customer churn prediction model
+- Used scikit-learn for model development
+- Achieved 85% accuracy on test dataset
+- Technologies: Python, scikit-learn, pandas, numpy
+
+CERTIFICATIONS
+- Python Institute PCAP Certification (2022)
+- AWS Cloud Practitioner (2023)

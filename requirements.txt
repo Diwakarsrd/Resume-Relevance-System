@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pdfplumber
+python-docx
+sqlmodel
+requests
+pydantic
+python-dotenv
+scikit-learn
+numpy
+pandas
+rapidfuzz
+streamlit
+google-generativeai
+plotly
