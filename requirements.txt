@@ -1,13 +1,2 @@
 streamlit
-requests
 pandas
-plotly
-fastapi
-uvicorn
-python-multipart
-pdfplumber
-python-docx
-sqlmodel
-pydantic
-python-dotenv
-rapidfuzz

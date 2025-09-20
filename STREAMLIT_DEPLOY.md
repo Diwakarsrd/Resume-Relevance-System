@@ -1,32 +1,33 @@
-# 🚀 Streamlit Cloud Deployment Guide
+# Streamlit Cloud Deployment Guide
 
-## 🆘 QUICK FIX for Requirements Error
+## Quick Deploy for Streamlit Cloud
 
-If you're getting a requirements installation error, try these fixes:
+### Deploy Settings:
+1. **Repository:** `YOUR_USERNAME/Resume-Relevance-System`
+2. **Branch:** `main`
+3. **Main file path:** `streamlit_app.py`
+4. **Requirements:** Will use `requirements.txt` automatically
 
-### Option 1: Use Minimal Setup
-1. **Rename your main file** in Streamlit Cloud settings:
-   - Change from: `streamlit_app.py`
-   - To: `streamlit_app_simple.py`
+### Features Available:
+- Dashboard with metrics and analytics
+- Job management with skill requirements
+- Resume upload (text paste or file upload)
+- Individual and bulk evaluation
+- Detailed scoring and feedback
+- Analytics and reporting
+- Data export functionality
 
-### Option 2: Use Simplified Requirements
-1. **In your GitHub repo**, replace `requirements.txt` with:
-```txt
-streamlit
-requests
-pandas
-plotly
-fastapi
-uvicorn
-python-multipart
-```
+### No Setup Required:
+- Uses in-memory storage (session state)
+- No database configuration needed
+- No API keys required
+- Minimal dependencies (just streamlit and pandas)
 
-### Option 3: Restart with Clean Deploy
-1. **Delete the app** in Streamlit Cloud
-2. **Create new app** with these exact settings:
-   - Repository: `YOUR_USERNAME/Resume-Relevance-System`
-   - Branch: `main` 
-   - Main file: `streamlit_app_simple.py`
+### Usage Instructions:
+1. Create jobs with required skills
+2. Upload resumes (text format recommended)
+3. Evaluate individual resumes or bulk process
+4. View detailed analytics and export reports
 
 ---
 
