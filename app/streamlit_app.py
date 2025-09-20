@@ -14,7 +14,7 @@ st.set_page_config(
 )
 
 # API Configuration
-API = st.sidebar.text_input('Backend API URL', value='http://localhost:8003')
+API = st.sidebar.text_input('Backend API URL', value='http://localhost:8080')
 
 # Custom CSS for better styling
 st.markdown("""
@@ -110,7 +110,7 @@ if page == "Dashboard Overview":
             scores = [ev['final_score'] for ev in evaluations]
             fig = px.histogram(x=scores, nbins=20, title="Distribution of Resume Scores")
             fig.update_layout(xaxis_title="Score", yaxis_title="Count")
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
 
 elif page == "Job Management":
     st.header("💼 Job Management")
@@ -199,196 +199,143 @@ elif page == "Resume Upload":
         st.subheader("⬆️ Upload New Resume")
         
         with st.form("resume_form"):
-            name = st.text_input("Candidate Name*")
-            email = st.text_input("Email Address*")
+            col_a, col_b = st.columns(2)
+            
+            with col_a:
+                name = st.text_input("Candidate Name*", placeholder="John Doe")
+            with col_b:
+                email = st.text_input("Email*", placeholder="john@example.com")
+            
             uploaded_file = st.file_uploader(
-                "Resume File*",
-                type=["pdf", "docx"],
-                help="Upload PDF or DOCX format only"
+                "Choose resume file (PDF/DOCX/TXT)*",
+                type=['pdf', 'docx', 'txt'],
+                help="Upload a resume in PDF, DOCX, or TXT format"
             )
             
-            submit = st.form_submit_button("🚀 Upload & Parse Resume")
+            submit = st.form_submit_button("📤 Upload & Parse Resume")
             
             if submit and name and email and uploaded_file:
-                with st.spinner("Uploading and analyzing resume..."):
-                    files = {"file": (uploaded_file.name, uploaded_file.getvalue())}
+                with st.spinner("Uploading and parsing resume..."):
+                    files = {"file": uploaded_file}
                     data = {"name": name, "email": email}
-                    
-                    result = post_api_data("/api/resumes", data=data, files=files)
+                    result = post_api_data("/api/resumes", data, files)
                     
                     if result:
-                        st.success("✅ Resume uploaded and analyzed successfully!")
+                        st.success(f"✅ Resume uploaded successfully! ID: {result['resume_id']}")
                         
-                        # Show parsing results
                         if 'parsed_info' in result:
+                            st.subheader("📊 Parsing Results")
                             parsed = result['parsed_info']
-                            st.subheader("🔍 Parsing Results")
                             
-                            metrics_col1, metrics_col2, metrics_col3, metrics_col4 = st.columns(4)
-                            with metrics_col1:
-                                st.metric("Skills Found", parsed['skills_found'])
-                            with metrics_col2:
-                                st.metric("Education", parsed['education_entries'])
-                            with metrics_col3:
-                                st.metric("Experience", parsed['experience_entries'])
-                            with metrics_col4:
-                                st.metric("Projects", parsed['projects_found'])
+                            col_x, col_y, col_z = st.columns(3)
+                            with col_x:
+                                st.metric("Skills Found", parsed.get('skills_found', 0))
+                            with col_y:
+                                st.metric("Experience Entries", parsed.get('experience_entries', 0))
+                            with col_z:
+                                st.metric("Education Entries", parsed.get('education_entries', 0))
     
     with col2:
-        st.subheader("📋 Recent Uploads")
-        resumes = get_api_data("/api/resumes", {"limit": 10})
-        
+        st.subheader("📊 Upload Statistics")
+        resumes = get_api_data("/api/resumes", {"limit": 100})
         if resumes:
-            for resume in resumes:
-                st.write(f"**{resume['candidate_name']}**")
-                st.write(f"Email: {resume['candidate_email']}")
-                st.write(f"Uploaded: {resume['uploaded_at'][:10]}")
-                st.write("---")
+            st.metric("Total Resumes", len(resumes))
+            
+            # Recent uploads
+            st.write("**Recent Uploads:**")
+            for resume in resumes[:5]:
+                st.write(f"• {resume.get('candidate_name', 'Unknown')} - {resume.get('candidate_email', 'No email')}")
 
 elif page == "Bulk Evaluation":
-    st.header("🚀 Bulk Evaluation & Results")
+    st.header("🔍 Bulk Resume Evaluation")
     
     # Job selection for bulk evaluation
-    jobs = get_api_data("/api/jobs")
-    if jobs:
-        selected_job = st.selectbox(
-            "Select Job for Bulk Evaluation",
-            options=[(job['id'], job['title']) for job in jobs],
-            format_func=lambda x: f"{x[1]} (ID: {x[0]})"
-        )
+    jobs = get_api_data("/api/jobs", {"limit": 100})
+    resumes = get_api_data("/api/resumes", {"limit": 100})
+    
+    if jobs and resumes:
+        col1, col2 = st.columns([2, 1])
         
-        if selected_job and st.button("🚀 Run Bulk Evaluation"):
-            with st.spinner("Processing all resumes for this job..."):
-                result = post_api_data("/api/bulk-evaluate", {"job_id": selected_job[0]})
+        with col1:
+            st.subheader("🎯 Select Job for Bulk Evaluation")
+            
+            job_options = {f"{job['title']} (ID: {job['id']})": job['id'] for job in jobs}
+            selected_job_name = st.selectbox("Choose Job:", list(job_options.keys()))
+            
+            if selected_job_name:
+                job_id = job_options[selected_job_name]
+                selected_job = next(job for job in jobs if job['id'] == job_id)
                 
-                if result:
-                    st.success(f"Processed {result['processed_count']} resumes!")
-                    
-                    # Show results summary
-                    if 'results' in result:
-                        results_df = pd.DataFrame(result['results'])
+                st.write(f"**Must-Have Skills:** {', '.join(selected_job.get('must_have', []))}")
+                st.write(f"**Nice-to-Have Skills:** {', '.join(selected_job.get('nice_to_have', []))}")
+                
+                if st.button("🚀 Start Bulk Evaluation", type="primary"):
+                    with st.spinner(f"Evaluating all resumes against {selected_job['title']}..."):
+                        result = post_api_data("/api/bulk-evaluate", {"job_id": job_id})
                         
-                        if not results_df.empty and 'score' in results_df.columns:
-                            # Score distribution
-                            fig = px.histogram(results_df, x='score', nbins=10, 
-                                             title="Score Distribution for Bulk Evaluation")
-                            st.plotly_chart(fig, width='stretch')
+                        if result:
+                            st.success(f"✅ Bulk evaluation completed!")
+                            st.info(f"📊 Processed {result['processed_count']} resumes")
                             
-                            # Verdict summary
-                            verdict_counts = results_df['verdict'].value_counts()
-                            fig_pie = px.pie(values=verdict_counts.values, names=verdict_counts.index,
-                                           title="Verdict Distribution")
-                            st.plotly_chart(fig_pie, width='stretch')
-    
-    # Show evaluation results with filtering
-    st.subheader("📉 Evaluation Results")
-    
-    # Filters
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        verdict_filter = st.selectbox("Filter by Verdict", ["All", "High", "Medium", "Low"])
-    with col2:
-        if jobs:
-            job_filter = st.selectbox(
-                "Filter by Job",
-                ["All"] + [(job['id'], job['title']) for job in jobs],
-                format_func=lambda x: "All" if x == "All" else f"{x[1]}"
-            )
-    with col3:
-        min_score = st.slider("Minimum Score", 0, 100, 0)
-    
-    # Fetch filtered evaluations
-    params = {"limit": 100}
-    if verdict_filter != "All":
-        params["verdict"] = verdict_filter
-    if job_filter != "All" and isinstance(job_filter, tuple):
-        params["job_id"] = job_filter[0]
-    
-    evaluations = get_api_data("/api/evaluations", params)
-    
-    if evaluations:
-        # Filter by minimum score
-        filtered_evals = [ev for ev in evaluations if ev['final_score'] >= min_score]
+                            # Show some sample results
+                            evaluations = get_api_data("/api/evaluations", {"job_id": job_id, "limit": 10})
+                            if evaluations:
+                                st.subheader("📈 Sample Results")
+                                df = pd.DataFrame(evaluations)
+                                st.dataframe(df[['candidate_name', 'final_score', 'verdict']], use_container_width=True)
         
-        if filtered_evals:
-            df = pd.DataFrame(filtered_evals)
+        with col2:
+            st.subheader("📊 Statistics")
+            st.metric("Available Jobs", len(jobs))
+            st.metric("Available Resumes", len(resumes))
             
-            # Display results table
-            st.dataframe(
-                df[['candidate_name', 'job_title', 'final_score', 'verdict', 'eval_time']],
-                width='stretch'
-            )
-            
-            # Export functionality
-            if st.button("📎 Export Results to CSV"):
-                csv = df.to_csv(index=False)
-                st.download_button(
-                    label="Download CSV",
-                    data=csv,
-                    file_name=f"evaluation_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv"
-                )
-        else:
-            st.info("No evaluations found matching your criteria.")
+            evaluations = get_api_data("/api/evaluations", {"limit": 100})
+            if evaluations:
+                st.metric("Total Evaluations", len(evaluations))
 
 elif page == "Analytics":
-    st.header("📈 Analytics & Insights")
+    st.header("📊 Analytics & Insights")
     
-    evaluations = get_api_data("/api/evaluations", {"limit": 1000})
+    evaluations = get_api_data("/api/evaluations", {"limit": 200})
+    jobs = get_api_data("/api/jobs", {"limit": 100})
     
-    if evaluations and len(evaluations) > 0:
+    if evaluations and jobs:
+        # Convert to DataFrame
         df = pd.DataFrame(evaluations)
         
         col1, col2 = st.columns(2)
         
         with col1:
-            # Score distribution by verdict
-            fig = px.box(df, x='verdict', y='final_score', 
-                        title="Score Distribution by Verdict")
+            st.subheader("🎯 Score Distribution by Verdict")
+            verdict_counts = df['verdict'].value_counts()
+            fig = px.pie(values=verdict_counts.values, names=verdict_counts.index, 
+                        title="Evaluation Verdicts Distribution")
             st.plotly_chart(fig, use_container_width=True)
-            
-            # Top missing skills
-            all_missing = []
-            for ev in evaluations:
-                all_missing.extend(ev.get('missing_skills', []))
-            
-            if all_missing:
-                from collections import Counter
-                missing_counts = Counter(all_missing).most_common(10)
-                
-                fig = px.bar(
-                    x=[count for skill, count in missing_counts],
-                    y=[skill for skill, count in missing_counts],
-                    orientation='h',
-                    title="Top 10 Missing Skills",
-                    labels={'x': 'Frequency', 'y': 'Skills'}
-                )
-                st.plotly_chart(fig, width='stretch')
         
         with col2:
-            # Evaluations over time
-            df['eval_time'] = pd.to_datetime(df['eval_time'])
-            daily_evals = df.groupby(df['eval_time'].dt.date).size()
-            
-            fig = px.line(x=daily_evals.index, y=daily_evals.values,
-                         title="Evaluations Over Time",
-                         labels={'x': 'Date', 'y': 'Number of Evaluations'})
-            st.plotly_chart(fig, width='stretch')
-            
-            # Summary statistics
-            st.subheader("📊 Summary Statistics")
-            col_a, col_b = st.columns(2)
-            
-            with col_a:
-                st.metric("Total Evaluations", len(evaluations))
-                st.metric("Average Score", f"{df['final_score'].mean():.1f}%")
-            
-            with col_b:
-                st.metric("High Suitability", len(df[df['verdict'] == 'High']))
-                st.metric("Median Score", f"{df['final_score'].median():.1f}%")
+            st.subheader("📈 Average Scores by Job")
+            job_scores = df.groupby('job_title')['final_score'].mean().sort_values(ascending=False)
+            fig = px.bar(x=job_scores.values, y=job_scores.index, 
+                        title="Average Resume Scores by Job Position", orientation='h')
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # Timeline analysis
+        st.subheader("📅 Evaluation Timeline")
+        df['eval_time'] = pd.to_datetime(df['eval_time'])
+        daily_evals = df.groupby(df['eval_time'].dt.date).size()
+        
+        fig = px.line(x=daily_evals.index, y=daily_evals.values, 
+                     title="Daily Evaluation Volume")
+        fig.update_layout(xaxis_title="Date", yaxis_title="Evaluations")
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Detailed table
+        st.subheader("📋 Detailed Evaluation Results")
+        st.dataframe(df.sort_values('eval_time', ascending=False), use_container_width=True)
+    
     else:
-        st.info("No evaluation data available for analytics. Upload resumes and run evaluations first.")
+        st.info("No evaluation data available yet. Start by creating jobs and uploading resumes!")
 
 # Footer
 st.markdown("---")
-st.markdown("🎆 **Innomatics Research Labs** - Resume Relevance Check System | Powered by AI")
+st.markdown("💼 **Resume Relevance Check System** | Powered by AI | Built for Innomatics Research Labs")
