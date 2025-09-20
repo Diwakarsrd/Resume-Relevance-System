@@ -9,11 +9,6 @@ from pathlib import Path
 import sys
 import os
 
-# Add app directory to Python path
-app_dir = Path(__file__).parent / "app"
-if str(app_dir) not in sys.path:
-    sys.path.append(str(app_dir))
-
 # Configure Streamlit page
 st.set_page_config(
     page_title="Resume Relevance System",
@@ -26,8 +21,8 @@ st.set_page_config(
 def start_fastapi_server():
     """Start a minimal FastAPI server"""
     try:
-        # Import the main FastAPI app
-        from main import app as fastapi_app
+        # Import the simple FastAPI app from root directory
+        from main_simple import app as fastapi_app
         
         def run_server():
             uvicorn.run(
