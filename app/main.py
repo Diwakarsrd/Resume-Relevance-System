@@ -6,6 +6,8 @@ import os
 from typing import List, Optional
 import json
 
+# ... existing code ...
+
 from app.models import SQLModel, Job, Candidate, Resume, Evaluation
 from app.parsers import (
     extract_text_pdf, extract_text_docx, normalize_text, 
@@ -20,11 +22,37 @@ BASE = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-DATABASE_URL = f"sqlite:///{BASE / 'data.db'}"
+# Use in-memory database for Vercel or fallback to file-based
+if os.getenv('VERCEL'):
+    DATABASE_URL = "sqlite:///:memory:"
+else:
+    DATABASE_URL = f"sqlite:///{BASE / 'data.db'}"
+    
 engine = create_engine(DATABASE_URL, echo=False)
 SQLModel.metadata.create_all(engine)
 
-app = FastAPI()
+app = FastAPI(title="Resume Relevance Check System", description="AI-powered resume evaluation platform")
+
+@app.get("/")
+def root():
+    """Root endpoint with system information"""
+    return {
+        "message": "Resume Relevance Check System API",
+        "version": "1.0.0",
+        "status": "running",
+        "docs": "/docs",
+        "endpoints": {
+            "jobs": "/api/jobs",
+            "resumes": "/api/resumes", 
+            "evaluate": "/api/evaluate",
+            "bulk_evaluate": "/api/bulk-evaluate"
+        }
+    }
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint for monitoring"""
+    return {"status": "healthy", "service": "resume-relevance-api"}
 
 @app.post("/api/jobs")
 def add_job(title: str = Form(...), jd_text: str = Form(...), must_have: str = Form(""), nice_to_have: str = Form("")):

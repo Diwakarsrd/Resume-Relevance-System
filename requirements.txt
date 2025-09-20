@@ -14,3 +14,4 @@ rapidfuzz
 streamlit
 google-generativeai
 plotly
+mangum

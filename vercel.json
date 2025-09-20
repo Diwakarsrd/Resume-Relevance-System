@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "dashboard/index.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/dashboard/(.*)",
+      "dest": "/dashboard/index.py"
+    },
+    {
+      "src": "/",
+      "dest": "/dashboard/index.py"
+    }
+  ],
+  "env": {
+    "GEMINI_API_KEY": "@gemini_api_key"
+  },
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 60
+    },
+    "dashboard/index.py": {
+      "maxDuration": 60
+    }
+  }
+}
