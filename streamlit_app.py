@@ -3,6 +3,24 @@ import pandas as pd
 import json
 import re
 from datetime import datetime
+import tempfile
+import os
+
+# Import PDF and document parsing functions
+try:
+    from app.parsers import extract_text_pdf, extract_text_docx, normalize_text, parse_resume_structured
+    PDF_SUPPORT = True
+except ImportError:
+    # Fallback functions if parsers module is not available
+    PDF_SUPPORT = False
+    def extract_text_pdf(path):
+        return "PDF parsing not available - please install required dependencies"
+    def extract_text_docx(path):
+        return "DOCX parsing not available - please install required dependencies"
+    def normalize_text(text):
+        return text
+    def parse_resume_structured(text):
+        return {'skills': [], 'education': [], 'experience': []}
 
 # Configure Streamlit page
 st.set_page_config(
@@ -30,6 +48,52 @@ page = st.sidebar.selectbox(
 )
 
 # Helper functions
+def extract_candidate_details(text):
+    """Extract candidate name and email from resume text using improved patterns"""
+    lines = text.strip().split('\n')
+    name = None
+    email = None
+    phone = None
+    
+    # Improved email extraction
+    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+    emails = re.findall(email_pattern, text)
+    if emails:
+        email = emails[0]
+    
+    # Improved name extraction
+    # Look for name in first few lines, avoiding headers like "Resume" or "CV"
+    for line in lines[:10]:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # Skip common header words
+        skip_words = ['resume', 'cv', 'curriculum vitae', 'profile', 'summary', 'objective']
+        if any(word in line.lower() for word in skip_words):
+            continue
+            
+        # Check if line looks like a name (2-4 words, mostly alphabetic)
+        words = line.split()
+        if 2 <= len(words) <= 4 and all(word.replace('.', '').isalpha() for word in words):
+            # Additional check: avoid lines with job titles or locations
+            job_indicators = ['engineer', 'developer', 'manager', 'analyst', 'coordinator', 'specialist']
+            if not any(indicator in line.lower() for indicator in job_indicators):
+                name = line
+                break
+    
+    # Phone number extraction (optional)
+    phone_pattern = r'\b(?:\+?1[-\s]?)?\(?([0-9]{3})\)?[-\s]?([0-9]{3})[-\s]?([0-9]{4})\b'
+    phones = re.findall(phone_pattern, text)
+    if phones:
+        phone = '-'.join(phones[0])
+    
+    return {
+        'name': name,
+        'email': email,
+        'phone': phone
+    }
+
 def extract_skills(text, custom_skills=None):
     """Extract skills from text using keyword matching"""
     # Default skill list - can be expanded
@@ -273,19 +337,39 @@ elif page == "Resume Upload":
     with tab1:
         st.subheader("Upload New Resume")
         
+        # Show PDF support status
+        if PDF_SUPPORT:
+            st.success("✅ PDF and DOCX parsing is available")
+        else:
+            st.warning("⚠️ PDF and DOCX parsing requires additional dependencies. Only TXT files will be fully processed.")
+        
         with st.form("resume_form", clear_on_submit=True):
+            # Auto-extraction options
+            col_auto1, col_auto2 = st.columns(2)
+            with col_auto1:
+                auto_extract_name = st.checkbox("Auto-extract candidate name from file", value=True, help="Automatically extract name from resume content")
+            with col_auto2:
+                auto_extract_email = st.checkbox("Auto-extract email from file", value=True, help="Automatically extract email from resume content")
+            
+            # Initialize session state for form values if not exists
+            if 'form_candidate_name' not in st.session_state:
+                st.session_state.form_candidate_name = ""
+            if 'form_candidate_email' not in st.session_state:
+                st.session_state.form_candidate_email = ""
+            
             # Candidate details
             col1, col2 = st.columns(2)
             with col1:
-                candidate_name = st.text_input("Candidate Name*", placeholder="John Doe")
+                candidate_name = st.text_input("Candidate Name*", value=st.session_state.form_candidate_name, placeholder="John Doe", key="input_name")
             with col2:
-                candidate_email = st.text_input("Email*", placeholder="john.doe@email.com")
+                candidate_email = st.text_input("Email*", value=st.session_state.form_candidate_email, placeholder="john.doe@email.com", key="input_email")
             
             # Resume upload options
             upload_method = st.radio("Choose upload method:", 
                                     ["Upload file", "Paste resume text"])
             
             resume_content = ""
+            extracted_details = None
             
             if upload_method == "Upload file":
                 uploaded_file = st.file_uploader("Choose resume file", 
@@ -293,68 +377,278 @@ elif page == "Resume Upload":
                                                 help="Supported formats: TXT, PDF, DOCX")
                 
                 if uploaded_file is not None:
-                    if uploaded_file.type == "text/plain":
-                        resume_content = str(uploaded_file.read(), "utf-8")
-                    else:
-                        st.warning("PDF and DOCX parsing requires additional libraries. Please use TXT files or paste text directly.")
-                        resume_content = f"File uploaded: {uploaded_file.name}"
+                    # Process the uploaded file
+                    file_extension = uploaded_file.name.split('.')[-1].lower()
+                    
+                    try:
+                        if file_extension == 'txt':
+                            resume_content = str(uploaded_file.read(), "utf-8")
+                        elif file_extension == 'pdf' and PDF_SUPPORT:
+                            # Save temporarily and extract text with better file handling
+                            try:
+                                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                                    tmp_file.write(uploaded_file.read())
+                                    tmp_file.flush()
+                                    tmp_file.close()  # Close file before reading
+                                    resume_content = extract_text_pdf(tmp_file.name)
+                                    resume_content = normalize_text(resume_content)
+                                    # Clean up temp file
+                                    try:
+                                        os.unlink(tmp_file.name)
+                                    except OSError:
+                                        pass  # File might already be deleted
+                            except Exception as e:
+                                st.error(f"Error processing PDF: {str(e)}")
+                                resume_content = ""
+                        elif file_extension == 'docx' and PDF_SUPPORT:
+                            # Save temporarily and extract text with better file handling
+                            try:
+                                with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp_file:
+                                    tmp_file.write(uploaded_file.read())
+                                    tmp_file.flush()
+                                    tmp_file.close()  # Close file before reading
+                                    resume_content = extract_text_docx(tmp_file.name)
+                                    resume_content = normalize_text(resume_content)
+                                    # Clean up temp file
+                                    try:
+                                        os.unlink(tmp_file.name)
+                                    except OSError:
+                                        pass  # File might already be deleted
+                            except Exception as e:
+                                st.error(f"Error processing DOCX: {str(e)}")
+                                resume_content = ""
+                        else:
+                            if not PDF_SUPPORT:
+                                st.warning("PDF and DOCX parsing requires additional libraries. Please use TXT files or paste text directly.")
+                                resume_content = f"File uploaded: {uploaded_file.name}"
+                            else:
+                                st.error(f"Unsupported file type: {file_extension}")
+                        
+                        # Extract candidate details if auto-extraction is enabled
+                        if resume_content and len(resume_content) > 50:  # Only if we have substantial content
+                            extracted_details = extract_candidate_details(resume_content)
+                            
+                            # Auto-fill form fields if enabled and fields are empty
+                            if auto_extract_name and extracted_details['name'] and not candidate_name:
+                                st.session_state.form_candidate_name = extracted_details['name']
+                                st.rerun()
+                            if auto_extract_email and extracted_details['email'] and not candidate_email:
+                                st.session_state.form_candidate_email = extracted_details['email']
+                                st.rerun()
+                            
+                            # Show auto-extracted information
+                            if extracted_details['name'] or extracted_details['email']:
+                                st.success("Candidate details extracted successfully!")
+                                if extracted_details['name']:
+                                    st.info(f"Extracted Name: {extracted_details['name']}")
+                                if extracted_details['email']:
+                                    st.info(f"Extracted Email: {extracted_details['email']}")
+                                if extracted_details['phone']:
+                                    st.info(f"Extracted Phone: {extracted_details['phone']}")
+                            
+                    except Exception as e:
+                        st.error(f"Error processing file: {str(e)}")
             
             else:  # Paste text
                 resume_content = st.text_area("Paste resume text*", 
                                             height=300,
                                             placeholder="Paste the complete resume text here...")
+                
+                # Extract details from pasted text too
+                if resume_content and len(resume_content) > 50:
+                    extracted_details = extract_candidate_details(resume_content)
+                    
+                    # Auto-fill form fields if enabled and fields are empty
+                    if auto_extract_name and extracted_details['name'] and not candidate_name:
+                        st.session_state.form_candidate_name = extracted_details['name']
+                        st.rerun()
+                    if auto_extract_email and extracted_details['email'] and not candidate_email:
+                        st.session_state.form_candidate_email = extracted_details['email']
+                        st.rerun()
+                    
+                    if extracted_details['name'] or extracted_details['email']:
+                        st.success("Candidate details extracted from text!")
+                        if extracted_details['name']:
+                            st.info(f"Extracted Name: {extracted_details['name']}")
+                        if extracted_details['email']:
+                            st.info(f"Extracted Email: {extracted_details['email']}")
             
             submitted = st.form_submit_button("Upload Resume", type="primary")
+            clear_form = st.form_submit_button("Clear Form")
+            
+            # Handle clear form action
+            if clear_form:
+                st.session_state.form_candidate_name = ""
+                st.session_state.form_candidate_email = ""
+                st.rerun()
             
             if submitted:
-                if candidate_name and candidate_email and resume_content:
-                    # Extract skills from resume
-                    extracted_skills = extract_skills(resume_content)
+                # Use extracted details if auto-extraction is enabled and form fields are empty
+                final_name = candidate_name
+                final_email = candidate_email
+                
+                if extracted_details:
+                    if auto_extract_name and not candidate_name and extracted_details['name']:
+                        final_name = extracted_details['name']
+                    if auto_extract_email and not candidate_email and extracted_details['email']:
+                        final_email = extracted_details['email']
+                
+                if final_name and final_email and resume_content:
+                    # Extract skills from resume using appropriate method
+                    if uploaded_file and uploaded_file.name.split('.')[-1].lower() in ['pdf', 'docx'] and PDF_SUPPORT:
+                        # Use structured parsing for better skill extraction
+                        parsed_data = parse_resume_structured(resume_content)
+                        extracted_skills = parsed_data.get('skills', [])
+                        if not extracted_skills:  # Fallback to basic extraction
+                            extracted_skills = extract_skills(resume_content)
+                    else:
+                        extracted_skills = extract_skills(resume_content)
                     
                     # Create resume object
                     resume = {
                         "id": len(st.session_state.resumes) + 1,
-                        "name": candidate_name,
-                        "email": candidate_email,
+                        "name": final_name,
+                        "email": final_email,
                         "content": resume_content,
                         "skills": extracted_skills,
-                        "upload_date": datetime.now().strftime("%Y-%m-%d %H:%M")
+                        "upload_date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "phone": extracted_details.get('phone', '') if extracted_details else '',
+                        "source": f"single_upload_{uploaded_file.name.split('.')[-1].lower() if uploaded_file else 'text'}"
                     }
                     
                     st.session_state.resumes.append(resume)
-                    st.success(f"Resume for {candidate_name} uploaded successfully! (ID: {resume['id']})")
+                    st.success(f"Resume for {final_name} uploaded successfully! (ID: {resume['id']})")
                     
-                    # Show extracted skills
-                    if extracted_skills:
-                        st.write(f"**Skills found:** {', '.join(extracted_skills)}")
-                    else:
-                        st.warning("No recognizable skills found in the resume.")
+                    # Clear form after successful upload
+                    st.session_state.form_candidate_name = ""
+                    st.session_state.form_candidate_email = ""
+                    
+                    # Show detailed extraction results
+                    col_result1, col_result2 = st.columns(2)
+                    with col_result1:
+                        st.write("**Extracted Information:**")
+                        st.write(f"• Name: {final_name}")
+                        st.write(f"• Email: {final_email}")
+                        if resume['phone']:
+                            st.write(f"• Phone: {resume['phone']}")
+                        st.write(f"• Source: {resume['source']}")
+                    
+                    with col_result2:
+                        st.write("**Skills Extracted:**")
+                        if extracted_skills:
+                            for skill in extracted_skills[:8]:  # Show top 8 skills
+                                st.write(f"• {skill}")
+                            if len(extracted_skills) > 8:
+                                st.write(f"... and {len(extracted_skills) - 8} more")
+                        else:
+                            st.warning("No recognizable skills found in the resume.")
                     
                     st.rerun()
                 else:
-                    st.error("Please fill in all required fields (*)")
+                    missing_fields = []
+                    if not final_name:
+                        missing_fields.append("candidate name")
+                    if not final_email:
+                        missing_fields.append("email")
+                    if not resume_content:
+                        missing_fields.append("resume content")
+                    
+                    st.error(f"Please provide the following required fields: {', '.join(missing_fields)}")
     
     with tab2:
         st.subheader("Uploaded Resumes")
         
         if st.session_state.resumes:
-            for resume in st.session_state.resumes:
-                with st.expander(f"{resume['name']} (ID: {resume['id']})"):
+            # Add filter and search options
+            col_filter1, col_filter2 = st.columns(2)
+            with col_filter1:
+                search_term = st.text_input("Search resumes by name or email:", placeholder="Enter name or email...")
+            with col_filter2:
+                source_filter = st.selectbox("Filter by source:", 
+                                           options=["All"] + list(set([r.get('source', 'unknown') for r in st.session_state.resumes])))
+            
+            # Filter resumes based on search and filter criteria
+            filtered_resumes = st.session_state.resumes
+            
+            if search_term:
+                filtered_resumes = [r for r in filtered_resumes 
+                                  if search_term.lower() in r['name'].lower() or search_term.lower() in r['email'].lower()]
+            
+            if source_filter != "All":
+                filtered_resumes = [r for r in filtered_resumes if r.get('source', 'unknown') == source_filter]
+            
+            st.write(f"**Showing {len(filtered_resumes)} of {len(st.session_state.resumes)} resumes**")
+            
+            for resume in filtered_resumes:
+                with st.expander(f"{resume['name']} (ID: {resume['id']}) - {resume.get('source', 'unknown')}"):
                     col1, col2 = st.columns([3, 1])
                     
                     with col1:
-                        st.write(f"**Email:** {resume['email']}")
-                        st.write(f"**Upload Date:** {resume['upload_date']}")
-                        st.write(f"**Skills Found:** {', '.join(resume['skills'])}")
+                        # Basic information
+                        info_col1, info_col2 = st.columns(2)
+                        with info_col1:
+                            st.write(f"**Email:** {resume['email']}")
+                            st.write(f"**Upload Date:** {resume['upload_date']}")
+                            st.write(f"**Skills Count:** {len(resume['skills'])}")
+                        with info_col2:
+                            if resume.get('phone'):
+                                st.write(f"**Phone:** {resume['phone']}")
+                            st.write(f"**Source:** {resume.get('source', 'unknown')}")
+                            st.write(f"**Content Length:** {len(resume['content'])} chars")
                         
-                        # Show preview of resume content
-                        preview = resume['content'][:200] + "..." if len(resume['content']) > 200 else resume['content']
-                        st.text_area("Resume Preview:", preview, height=100, disabled=True)
+                        # Skills section
+                        if resume['skills']:
+                            st.write("**Skills Found:**")
+                            # Display skills in a more organized way
+                            skills_per_row = 4
+                            skills = resume['skills']
+                            for i in range(0, len(skills), skills_per_row):
+                                skill_cols = st.columns(skills_per_row)
+                                for j, skill in enumerate(skills[i:i+skills_per_row]):
+                                    with skill_cols[j]:
+                                        st.write(f"• {skill}")
+                        else:
+                            st.warning("No skills found")
+                        
+                        # Content preview
+                        st.write("**Resume Preview:**")
+                        preview = resume['content'][:300] + "..." if len(resume['content']) > 300 else resume['content']
+                        st.text_area("Content Preview:", preview, height=100, disabled=True, key=f"preview_{resume['id']}")
                     
                     with col2:
-                        if st.button("Delete", key=f"delete_resume_{resume['id']}", type="secondary"):
+                        # Action buttons
+                        if st.button("View Full Content", key=f"view_{resume['id']}", help="View complete resume content"):
+                            with st.expander(f"Full Content - {resume['name']}", expanded=True):
+                                st.text_area("Complete Resume Content:", resume['content'], height=400, disabled=True)
+                        
+                        if st.button("Analyze Skills", key=f"analyze_{resume['id']}", help="Get detailed skill analysis"):
+                            with st.expander(f"Skill Analysis - {resume['name']}", expanded=True):
+                                if resume['skills']:
+                                    # Group skills by type (this is a simple categorization)
+                                    programming_skills = [s for s in resume['skills'] if any(prog in s.lower() for prog in ['python', 'java', 'javascript', 'react', 'angular', 'vue', 'node', 'php', 'c++', 'c#'])]
+                                    data_skills = [s for s in resume['skills'] if any(data in s.lower() for data in ['sql', 'database', 'mongodb', 'mysql', 'postgresql', 'data', 'analytics'])]
+                                    cloud_skills = [s for s in resume['skills'] if any(cloud in s.lower() for cloud in ['aws', 'azure', 'gcp', 'cloud', 'docker', 'kubernetes'])]
+                                    other_skills = [s for s in resume['skills'] if s not in programming_skills + data_skills + cloud_skills]
+                                    
+                                    if programming_skills:
+                                        st.write("**Programming & Development:**")
+                                        st.write(", ".join(programming_skills))
+                                    if data_skills:
+                                        st.write("**Data & Databases:**")
+                                        st.write(", ".join(data_skills))
+                                    if cloud_skills:
+                                        st.write("**Cloud & DevOps:**")
+                                        st.write(", ".join(cloud_skills))
+                                    if other_skills:
+                                        st.write("**Other Skills:**")
+                                        st.write(", ".join(other_skills))
+                                else:
+                                    st.warning("No skills detected for analysis")
+                        
+                        st.markdown("---")
+                        if st.button("Delete", key=f"delete_resume_{resume['id']}", type="secondary", help="Permanently delete this resume"):
                             st.session_state.resumes = [r for r in st.session_state.resumes if r['id'] != resume['id']]
-                            st.success("Resume deleted successfully!")
+                            st.success(f"Resume for {resume['name']} deleted successfully!")
                             st.rerun()
         else:
             st.info("No resumes uploaded yet. Upload your first resume using the form above.")
@@ -368,12 +662,18 @@ elif page == "Bulk Operations":
         st.subheader("Bulk Resume Upload")
         st.markdown("Upload multiple resumes at once for efficient processing")
         
+        # Show PDF support status
+        if PDF_SUPPORT:
+            st.success("PDF and DOCX parsing is available")
+        else:
+            st.warning("PDF and DOCX parsing requires additional dependencies. Only TXT files will be fully processed.")
+        
         # Multiple file upload
         uploaded_files = st.file_uploader(
             "Upload Multiple Resume Files",
-            type=['txt'],
+            type=['txt', 'pdf', 'docx'],
             accept_multiple_files=True,
-            help="Select multiple TXT files to upload at once"
+            help="Select multiple TXT, PDF, or DOCX files to upload at once"
         )
         
         # Bulk text input
@@ -397,29 +697,75 @@ elif page == "Bulk Operations":
             if uploaded_files:
                 for i, uploaded_file in enumerate(uploaded_files):
                     try:
-                        content = str(uploaded_file.read(), "utf-8")
+                        # Determine file type and extract content
+                        file_extension = uploaded_file.name.split('.')[-1].lower()
                         
-                        # Auto-extract name and email if enabled
+                        if file_extension == 'txt':
+                            content = str(uploaded_file.read(), "utf-8")
+                        elif file_extension == 'pdf':
+                            # Save temporarily and extract text with better file handling
+                            try:
+                                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                                    tmp_file.write(uploaded_file.read())
+                                    tmp_file.flush()
+                                    tmp_file.close()  # Close file before reading
+                                    content = extract_text_pdf(tmp_file.name)
+                                    content = normalize_text(content)
+                                    # Clean up temp file
+                                    try:
+                                        os.unlink(tmp_file.name)
+                                    except OSError:
+                                        pass  # File might already be deleted
+                            except Exception as e:
+                                st.error(f"Error processing PDF: {str(e)}")
+                                continue
+                        elif file_extension == 'docx':
+                            # Save temporarily and extract text with better file handling
+                            try:
+                                with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp_file:
+                                    tmp_file.write(uploaded_file.read())
+                                    tmp_file.flush()
+                                    tmp_file.close()  # Close file before reading
+                                    content = extract_text_docx(tmp_file.name)
+                                    content = normalize_text(content)
+                                    # Clean up temp file
+                                    try:
+                                        os.unlink(tmp_file.name)
+                                    except OSError:
+                                        pass  # File might already be deleted
+                            except Exception as e:
+                                st.error(f"Error processing DOCX: {str(e)}")
+                                continue
+                        else:
+                            st.error(f"Unsupported file type: {file_extension}")
+                            continue
+                        
+                        # Extract candidate details using improved method
+                        candidate_details = extract_candidate_details(content)
+                        
+                        # Set default values
                         name = f"Candidate_{len(st.session_state.resumes) + i + 1}"
                         email = f"candidate{len(st.session_state.resumes) + i + 1}@email.com"
                         
-                        if auto_extract_names:
-                            # Simple name extraction (first line or filename)
-                            lines = content.strip().split('\n')
-                            if lines and len(lines[0].split()) <= 4:
-                                name = lines[0].strip()
-                            else:
-                                name = uploaded_file.name.split('.')[0].replace('_', ' ').title()
+                        # Use auto-extracted values if available and options are enabled
+                        if auto_extract_names and candidate_details['name']:
+                            name = candidate_details['name']
+                        elif auto_extract_names:
+                            # Fallback to filename-based extraction
+                            name = uploaded_file.name.split('.')[0].replace('_', ' ').replace('-', ' ').title()
                         
-                        if auto_extract_emails:
-                            # Simple email extraction
-                            email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-                            emails = re.findall(email_pattern, content)
-                            if emails:
-                                email = emails[0]
+                        if auto_extract_emails and candidate_details['email']:
+                            email = candidate_details['email']
                         
-                        # Extract skills
-                        skills = extract_skills(content)
+                        # Extract skills using the structured parser for better results
+                        if file_extension in ['pdf', 'docx']:
+                            # Use structured parsing for better skill extraction
+                            parsed_data = parse_resume_structured(content)
+                            skills = parsed_data.get('skills', [])
+                            if not skills:  # Fallback to basic extraction
+                                skills = extract_skills(content)
+                        else:
+                            skills = extract_skills(content)
                         
                         # Create resume object
                         resume = {
@@ -429,11 +775,17 @@ elif page == "Bulk Operations":
                             "content": content,
                             "skills": skills,
                             "upload_date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                            "source": "bulk_upload"
+                            "source": f"bulk_upload_{file_extension}",
+                            "phone": candidate_details.get('phone', '')
                         }
                         
                         st.session_state.resumes.append(resume)
                         processed_count += 1
+                        
+                        # Show progress for each file
+                        st.success(f"Processed {uploaded_file.name}: {name} ({email})")
+                        if skills:
+                            st.info(f"Skills extracted: {', '.join(skills[:5])}{'...' if len(skills) > 5 else ''}")
                         
                     except Exception as e:
                         st.error(f"Error processing {uploaded_file.name}: {str(e)}")
@@ -481,6 +833,55 @@ elif page == "Bulk Operations":
             
             if processed_count > 0:
                 st.success(f"Successfully processed {processed_count} resumes!")
+                
+                # Display summary of processed files
+                st.subheader("Processing Summary")
+                recent_resumes = st.session_state.resumes[-processed_count:]
+                
+                summary_data = []
+                for resume in recent_resumes:
+                    summary_data.append({
+                        'File': resume.get('source', 'unknown'),
+                        'Name': resume['name'],
+                        'Email': resume['email'],
+                        'Skills Found': len(resume['skills']),
+                        'Top Skills': ', '.join(resume['skills'][:3]) + ('...' if len(resume['skills']) > 3 else '')
+                    })
+                
+                summary_df = pd.DataFrame(summary_data)
+                st.dataframe(summary_df, use_container_width=True)
+                
+                # Option to preview extracted content
+                with st.expander("Preview Extracted Content"):
+                    selected_preview = st.selectbox(
+                        "Select resume to preview:",
+                        options=range(len(recent_resumes)),
+                        format_func=lambda x: f"{recent_resumes[x]['name']} - {recent_resumes[x].get('source', 'unknown')}"
+                    )
+                    
+                    preview_resume = recent_resumes[selected_preview]
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write("**Candidate Details:**")
+                        st.write(f"Name: {preview_resume['name']}")
+                        st.write(f"Email: {preview_resume['email']}")
+                        if preview_resume.get('phone'):
+                            st.write(f"Phone: {preview_resume['phone']}")
+                    
+                    with col2:
+                        st.write("**Extracted Skills:**")
+                        if preview_resume['skills']:
+                            for skill in preview_resume['skills'][:10]:  # Show top 10 skills
+                                st.write(f"• {skill}")
+                        else:
+                            st.write("No skills extracted")
+                    
+                    # Show content preview
+                    st.write("**Content Preview:**")
+                    content_preview = preview_resume['content'][:500] + "..." if len(preview_resume['content']) > 500 else preview_resume['content']
+                    st.text_area("Resume Content", content_preview, height=200, disabled=True)
+                
                 st.rerun()
             else:
                 st.warning("No resumes to process. Please upload files or paste text.")

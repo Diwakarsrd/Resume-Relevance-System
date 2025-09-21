@@ -1,2 +1,10 @@
 streamlit
 pandas
+pdfplumber
+python-docx
+plotly
+requests
+fastapi
+uvicorn
+sqlmodel
+google-generativeai

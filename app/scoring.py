@@ -258,11 +258,11 @@ def generate_comprehensive_feedback(scoring_results: Dict, resume_data: Dict, jo
     verdict = scoring_results['verdict']
     
     if score >= 80:
-        feedback_sections.append(f"🎉 Excellent match! Your profile scores {score}/100 with a {verdict} suitability rating.")
+        feedback_sections.append(f"Excellent match! Your profile scores {score}/100 with a {verdict} suitability rating.")
     elif score >= 60:
-        feedback_sections.append(f"✅ Good match! Your profile scores {score}/100 with a {verdict} suitability rating.")
+        feedback_sections.append(f"Good match! Your profile scores {score}/100 with a {verdict} suitability rating.")
     else:
-        feedback_sections.append(f"📈 Areas for improvement. Your profile scores {score}/100 with a {verdict} suitability rating.")
+        feedback_sections.append(f"Areas for improvement. Your profile scores {score}/100 with a {verdict} suitability rating.")
     
     # Skills Analysis
     if scoring_results['missing_must_have']:
@@ -285,11 +285,11 @@ def generate_comprehensive_feedback(scoring_results: Dict, resume_data: Dict, jo
     
     # Experience Feedback
     if scoring_results['experience_score'] < 75:
-        feedback_sections.append(f"\n💼 Experience: {scoring_results['experience_feedback']}")
+        feedback_sections.append(f"\nExperience: {scoring_results['experience_feedback']}")
     
     # Project Feedback
     if scoring_results['project_score'] < 60:
-        feedback_sections.append(f"\n🚀 Projects: {scoring_results['project_feedback']}")
+        feedback_sections.append(f"\nProjects: {scoring_results['project_feedback']}")
         feedback_sections.append("Consider adding projects that demonstrate the required skills.")
     
     # Certification Recommendations
@@ -331,23 +331,23 @@ def suggest_certifications(skills: List[str]) -> List[str]:
 
 def generate_action_plan(scoring_results: Dict, job_data: Dict) -> str:
     """Generate a prioritized action plan for improvement"""
-    plan = ["\n📋 Action Plan for Improvement:"]
+    plan = ["\nAction Plan for Improvement:"]
     
     # Priority 1: Critical missing skills
     if scoring_results['missing_must_have']:
-        plan.append("\n1. 🎯 PRIORITY: Learn critical skills")
+        plan.append("\n1. PRIORITY: Learn critical skills")
         for i, skill in enumerate(scoring_results['missing_must_have'][:3], 1):
             plan.append(f"   {i}.{i} Focus on {skill}")
     
     # Priority 2: Projects
     if scoring_results['project_score'] < 60:
-        plan.append("\n2. 🚀 Build relevant projects")
+        plan.append("\n2. Build relevant projects")
         plan.append("   - Create 2-3 projects showcasing the missing skills")
         plan.append("   - Document projects on GitHub with clear README")
     
     # Priority 3: Experience/Education
     if scoring_results['experience_score'] < 60:
-        plan.append("\n3. 💼 Gain practical experience")
+        plan.append("\n3. Gain practical experience")
         plan.append("   - Look for internships or freelance opportunities")
         plan.append("   - Contribute to open-source projects")
     
